@@ -48,7 +48,9 @@ Write out the scaled down topology::
 .. Note::
 
    You can use this to prepare a series of top files for Hamiltonian Replica
+
    Exchange (HREX) simulations. See ``scripts/gw-partial_tempering.py`` for an example.
+
 
 """
 from __future__ import absolute_import
@@ -231,7 +233,6 @@ class TOP(blocks.System):
                     # ;name               at.num    mass         charge    ptype  sigma   epsilon
                     # ;name   bond_type   at.num    mass         charge    ptype  sigma   epsilon
                     # ;name                         mass         charge    ptype  c6      c12
-
                     '''
                     if len(fields) not in (6,7,8):
                         self.logger('skipping atomtype line with neither 7 or 8 fields: \n {0:s}'.format(line))
@@ -239,6 +240,7 @@ class TOP(blocks.System):
 
                     #shift = 0 if len(fields) == 7 else 1
                     shift = len(fields) - 7
+
                     at = blocks.AtomType('gromacs')
                     at.atype = fields[0]
                     if shift == 1: at.bond_type = fields[1]
@@ -395,12 +397,12 @@ class TOP(blocks.System):
                     fu     = int(fields[2])
                     assert fu in (1,2,3,4,5,6,7,8,9,10)
 
-                    if fu != 1:
-                        raise NotImplementedError('function {0:d} is not yet supported'.format(fu))
+                    if not fu in [1, 2]:
+                        raise NotImplementedError('bonds/bondtypes function {0:d} is not yet supported'.format(fu))
 
                     bond = blocks.BondType('gromacs')
 
-                    if fu == 1:
+                    if fu in [1, 2]:
                         if curr_sec == 'bondtypes':
                             bond.atype1 = ai
                             bond.atype2 = aj
@@ -475,7 +477,16 @@ class TOP(blocks.System):
 
                     elif fu == 2:
                         if curr_sec == 'angletypes':
-                            raise NotImplementedError()
+
+                            ang.atype1 = ai
+                            ang.atype2 = aj
+                            ang.atype3 = ak
+
+                            tetha0, ktetha = list(map(float, fields[4:6]))
+                            ang.gromacs = {'param':{'ktetha':ktetha, 'tetha0':tetha0, 'kub':None, 's0':None}, 'func':fu}
+
+                            self.angletypes.append(ang)
+                            _add_info(self, curr_sec, self.angletypes)
 
                         elif curr_sec == 'angles':
                             ai, aj, ak = list(map(int, [ai, aj, ak]))
@@ -558,7 +569,7 @@ class TOP(blocks.System):
 
                             if fu == 1:
                                 delta, kchi, n = list(map(float, fields[5:8]))
-                                dih.gromacs['param'].append({'kchi':kchi, 'n':n, 'delta':delta})
+                                dih.gromacs['param'].append({'kchi':kchi, 'n':int(n), 'delta':delta})
                             elif fu == 3:
                                 c0, c1, c2, c3, c4, c5 = list(map(float, fields[5:11]))
                                 m = dict(c0=c0, c1=c1, c2=c2, c3=c3, c4=c4, c5=c5)
@@ -639,7 +650,9 @@ class TOP(blocks.System):
                             imp.line = i_line + 1
 
                             if fu == 2:
-                                pass
+                                if len(fields[5:7]) == 2:
+                                    psi0 , kpsi = list(map(float, fields[5:8]))
+                                    imp.gromacs['param'].append({'kpsi':kpsi, 'psi0': psi0})
                             elif fu == 4:
                                 # in-line override of dihedral parameters
                                 if len(fields[5:8]) == 3:
@@ -854,6 +867,7 @@ class SystemToGroTop(object):
         'pairtypes'      : '{:6s} {:6s}   {:d}    {:.13g}     {:.13g}\n',
         'pairs'          : '{:3d} {:3d}   {:1d}\n',
         'angletypes_1'   : '{:>8s} {:>8s} {:>8s} {:1d}    {}    {}\n',
+        'angletypes_2'   : '{:>8s} {:>8s} {:>8s} {:1d}    {}    {}\n',
         'angletypes_5'   : '{:>8s} {:>8s} {:>8s} {:1d}    {}    {}    {}    {}\n',
         'constrainttypes': '{:6s} {:6s} {:1d}    {}\n',
         'angles'         : '{:3d} {:3d} {:3d}   {:1d}\n',
